@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>FairMeet Pro | Boxed Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: #f8fafc; height: 100vh; display: flex; flex-direction: column; overflow: hidden; color: #1e293b; }
+
+        /* The Particular Map Box */
+        .map-container-box {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 3rem;
+            padding: 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+            flex-grow: 1;
+            position: relative;
+        }
+        #map { height: 100%; width: 100%; border-radius: 2rem; border: 1px solid #f1f5f9; }
+
+        /* BIG WEIGHT INPUT BOX */
+        .big-wt-input {
+            width: 75px;
+            height: 55px;
+            background: #ffffff;
+            border: 2px solid #e2e8f0;
+            border-radius: 14px;
+            color: #4f46e5;
+            font-size: 1.6rem;
+            font-weight: 800;
+            text-align: center;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .big-wt-input:focus { border-color: #6366f1; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); }
+
+        /* SLIDER STYLING */
+        input[type=range] { appearance: none; height: 6px; background: #e2e8f0; border-radius: 5px; outline: none; width: 100%; }
+        input[type=range]::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; background: #6366f1; border-radius: 50%; cursor: pointer; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        .mode-btn { padding: 12px 24px; background: #f1f5f9; border-radius: 14px; border: 2px solid transparent; font-size: 1.4rem; transition: all 0.2s; }
+        .mode-btn.active { border-color: #6366f1; background: white; box-shadow: 0 4px 10px rgba(99, 102, 241, 0.1); transform: scale(1.05); }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="h-20 bg-white border-b px-10 flex justify-between items-center shrink-0 z-50">
+        <div class="flex items-center gap-4">
+            <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-black italic shadow-lg shadow-indigo-100">F</div>
+            <h1 class="text-xl font-black tracking-tighter italic">FAIRMEET <span class="text-indigo-600">PRO</span></h1>
+        </div>
+
+        <div class="flex items-center gap-8">
+            <div class="flex bg-slate-100 p-1.5 rounded-2xl gap-2">
+                <button onclick="setMode('walk')" id="m-walk" class="mode-btn">🚶</button>
+                <button onclick="setMode('bike')" id="m-bike" class="mode-btn">🚲</button>
+                <button onclick="setMode('drive')" id="m-drive" class="mode-btn active">🚗</button>
+            </div>
+            <!-- GLOBAL WEIGHT ENTRY -->
+            <div class="flex items-center gap-4 border-l pl-8">
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Global Default WT:</span>
+                <input type="number" id="globalWeight" value="1.0" step="0.5" class="w-12 bg-transparent text-indigo-600 font-extrabold outline-none text-xl">
+            </div>
+            <button onclick="location.reload()" class="text-xs font-bold text-red-500 hover:text-red-700 px-4 py-2 rounded-xl transition uppercase tracking-widest">Reset</button>
+        </div>
+    </header>
+
+    <main class="flex-grow flex p-6 gap-6 overflow-hidden">
+        
+        <!-- Sidebar Dashboard -->
+        <aside class="w-[460px] flex flex-col gap-6 h-full shrink-0">
+            
+            <!-- Participant Hub (WHERE WEIGHTS ARE ENTERED) -->
+            <div class="bg-white border p-6 rounded-[2.5rem] flex flex-col flex-grow overflow-hidden shadow-sm">
+                <div class="flex justify-between items-center mb-6 px-2 shrink-0">
+                    <h3 class="text-xs font-extrabold text-slate-400 uppercase tracking-widest">Participant Access</h3>
+                    <span id="userCount" class="bg-indigo-600 text-white px-3 py-1 rounded-lg text-[10px] font-black tracking-widest">0 UNITS</span>
+                </div>
+                <div id="userList" class="custom-scroll overflow-y-auto flex-grow space-y-5 pr-2">
+                    <div class="py-24 text-center text-slate-300 italic text-sm font-medium">Click on the map box to add participants...</div>
+                </div>
+            </div>
+
+            <!-- Analytics Cockpit -->
+            <div id="analytics" class="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-2xl hidden shrink-0">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Group Effort</p>
+                        <h2 id="totalKm" class="text-4xl font-black italic tracking-tighter leading-none">0.0 km</h2>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1 leading-none italic">Balanced</p>
+                        <h2 id="fairnessScore" class="text-3xl font-black text-emerald-400 leading-none">--</h2>
+                    </div>
+                </div>
+                <div class="h-28 w-full mb-6 bg-white/5 rounded-2xl border border-white/5 p-3"><canvas id="travelChart"></canvas></div>
+                <button onclick="snapToCity()" class="w-full py-5 bg-indigo-600 hover:bg-indigo-500 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.3em] transition shadow-xl shadow-indigo-900/40">Center to Nearest City</button>
+            </div>
+        </aside>
+
+        <!-- The "Particular" Map Box -->
+        <section class="map-container-box">
+            <div id="map"></div>
+            
+            <!-- Location HUD -->
+            <div id="hud" class="absolute bottom-10 left-10 bg-white/95 backdrop-blur-md p-8 rounded-[2.5rem] hidden shadow-2xl z-[1000] border border-slate-100 max-w-sm">
+                <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-[0.4em] mb-2">Optimal Destination</p>
+                <h4 id="locationName" class="text-2xl font-black text-slate-800 leading-tight mb-4 italic tracking-tight italic">Finding spot...</h4>
+                <div class="flex gap-6 text-[10px] font-mono font-bold text-slate-400 border-t pt-4 uppercase tracking-tighter">
+                    <span>Lat: <b id="latDisplay" class="text-indigo-600">0</b></span>
+                    <span>Lng: <b id="lngDisplay" class="text-indigo-600">0</b></span>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let selectedMode = 'drive';
+        let users = [], markers = [], paths = [], centerPoint = null, chart = null;
+
+        let map = L.map('map', { zoomControl: false, attributionControl: false }).setView([12.9716, 77.5946], 11);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
+
+        const ctx = document.getElementById('travelChart').getContext('2d');
+        chart = new Chart(ctx, {
+            type: 'bar',
+            data: { labels: [], datasets: [{ data: [], backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 8 }] },
+            options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { display: false }, x: { ticks: { color: '#818cf8', font: { size: 10, weight: 'bold' } } } } }
+        });
+
+        function setMode(m) {
+            selectedMode = m;
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`m-${m}`).classList.add('active');
+        }
+
+        map.on('click', (e) => {
+            const color = `hsl(${Math.random() * 360}, 80%, 55%)`;
+            const defaultWt = parseFloat(document.getElementById('globalWeight').value) || 1;
+            
+            const user = { id: Date.now(), name: `Participant ${users.length + 1}`, lat: e.latlng.lat, lng: e.latlng.lng, weight: defaultWt, mode: selectedMode, color };
+            users.push(user);
+            
+            const m = L.circleMarker([e.latlng.lat, e.latlng.lng], { radius: 10, fillColor: color, color: '#fff', weight: 4, fillOpacity: 1 }).addTo(map);
+            markers.push({ id: user.id, layer: m });
+            
+            updateEngine();
+        });
+
+        function updateWeight(id, val) {
+            const u = users.find(x => x.id === id);
+            if (u) {
+                u.weight = parseFloat(val) || 0;
+                // Sync Slider and Box
+                document.querySelector(`input[data-num="${id}"]`).value = u.weight;
+                document.querySelector(`input[data-range="${id}"]`).value = u.weight;
+            }
+            updateEngine();
+        }
+
+        function updateEngine() {
+            document.getElementById('userCount').innerText = `${users.length} UNITS`;
+            if (users.length < 2) return;
+
+            const effort = { walk: 6, bike: 3, drive: 1 };
+            let rLat = users.reduce((s, u) => s + u.lat, 0) / users.length;
+            let rLng = users.reduce((s, u) => s + u.lng, 0) / users.length;
+
+            for (let i = 0; i < 40; i++) {
+                let nLat = 0, nLng = 0, den = 0;
+                users.forEach(u => {
+                    let d = Math.sqrt((rLat - u.lat)**2 + (rLng - u.lng)**2) || 0.001;
+                    let w = u.weight * effort[u.mode];
+                    nLat += u.lat * (w/d); nLng += u.lng * (w/d); den += (w/d);
+                });
+                rLat = nLat/den; rLng = nLng/den;
+            }
+            renderMission(rLat, rLng);
+        }
+
+        function renderMission(lat, lng) {
+            paths.forEach(p => map.removeLayer(p)); paths = [];
+            let total = 0, dists = [];
+            users.forEach(u => {
+                const d = haversine(u.lat, u.lng, lat, lng);
+                total += d; dists.push(d.toFixed(1));
+                paths.push(L.polyline([[u.lat, u.lng], [lat, lng]], { color: u.color, weight: 3, dashArray: '10, 20', opacity: 0.4 }).addTo(map));
+            });
+
+            const avgDist = total / users.length;
+            const variance = users.reduce((s, u, i) => s + Math.pow(parseFloat(dists[i]) - avgDist, 2), 0) / users.length;
+            const fairness = Math.max(0, 100 - (Math.sqrt(variance) / (avgDist || 1)) * 100);
+
+            if (centerPoint) map.removeLayer(centerPoint);
+            centerPoint = L.marker([lat, lng], { icon: L.divIcon({ html: '<div class="w-8 h-8 bg-indigo-600 border-[6px] border-white rounded-full shadow-2xl animate-pulse"></div>', iconSize: [32,32] }) }).addTo(map);
+
+            document.getElementById('analytics').classList.remove('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+            document.getElementById('totalKm').innerText = `${total.toFixed(1)} km`;
+            document.getElementById('fairnessScore').innerText = `${fairness.toFixed(0)}%`;
+            document.getElementById('latDisplay').innerText = lat.toFixed(4);
+            document.getElementById('lngDisplay').innerText = lng.toFixed(4);
+            
+            chart.data.labels = users.map(u => u.name);
+            chart.data.datasets[0].data = dists;
+            chart.update();
+            renderUserList();
+        }
+
+        function renderUserList() {
+            const icons = { drive: '🚗', bike: '🚲', walk: '🚶' };
+            document.getElementById('userList').innerHTML = users.map(u => `
+                <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 flex items-center justify-between shadow-sm group">
+                    <div class="flex items-center gap-5">
+                        <div class="w-4 h-4 rounded-full shadow-inner" style="background:${u.color}"></div>
+                        <div>
+                            <p class="text-sm font-black text-slate-800 tracking-tight leading-none mb-2">${u.name} ${icons[u.mode]}</p>
+                            <input type="range" min="1" max="10" step="0.5" value="${u.weight}" 
+                                   data-range="${u.id}" oninput="updateWeight(${u.id}, this.value)" 
+                                   class="w-32 block">
+                        </div>
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <span class="text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest leading-none">Priority</span>
+                        <input type="number" step="0.5" value="${u.weight}" 
+                               data-num="${u.id}" oninput="updateWeight(${u.id}, this.value)" 
+                               class="big-wt-input">
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function snapToCity() {
+            if(!centerPoint) return;
+            const lat = centerPoint.getLatLng().lat, lng = centerPoint.getLatLng().lng;
+            document.getElementById('locationName').innerText = "Analyzing territory...";
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`);
+                const data = await res.json();
+                const place = data.address.city || data.address.town || data.address.village || "Urban Zone";
+                document.getElementById('locationName').innerText = `📍 Vector: ${place}`;
+                renderMission(parseFloat(data.lat), parseFloat(data.lon));
+                map.flyTo([data.lat, data.lon], 13);
+            } catch(e) { document.getElementById('locationName').innerText = "Signal Timeout."; }
+        }
+
+        function haversine(la1, lo1, la2, lo2) { const R = 6371; const dLat = (la2-la1)*Math.PI/180, dLon = (lo2-lo1)*Math.PI/180; const a = Math.sin(dLat/2)**2 + Math.cos(la1*Math.PI/180)*Math.cos(la2*Math.PI/180)*Math.sin(dLon/2)**2; return R*2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); }
+    </script>
+</body>
+</html>

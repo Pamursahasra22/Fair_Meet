@@ -1,0 +1,6 @@
+# Executables
+*.exe
+fairmeet.exe
+
+# VS Code settings (Optional)
+.vscode/
